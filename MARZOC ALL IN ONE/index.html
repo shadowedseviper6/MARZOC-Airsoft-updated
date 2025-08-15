@@ -1,0 +1,989 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=yes" />
+<meta name="theme-color" content="#030303" />
+<meta name="color-scheme" content="dark" />
+<title>MARZOC Airsoft — Mission Terminal</title>
+<meta name="description" content="MARZOC Airsoft — Waitlist. Tactical HUD, rotating holographic armory, operational gallery." />
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@300;600;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#030303;
+  --panel:#0d0d0d;
+  --accent:#ffd300;
+  --muted:#9b9b9b;
+  --holo:#00f5ff;
+  --glow: 0 12px 40px rgba(255,163,0,0.08);
+  --deploy-start:#ff7a00;
+  --deploy-end:#ff3b3b;
+  --radius:12px;
+  font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,Arial;
+}
+
+/* Accessibility: Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --accent: #ffff00;
+    --muted: #ffffff;
+  }
+}
+
+*{box-sizing:border-box}
+html,body{
+    margin:0;
+    background:var(--bg);
+    color:#eaeaea;
+    overflow-x: hidden;
+}
+html {
+    scroll-behavior: smooth;
+}
+a{color:var(--accent);text-decoration:none}
+
+/* Focus indicators for accessibility */
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* tactical mesh background (behind slides) */
+.mesh-bg{position:fixed;inset:0;pointer-events:none;z-index:-1;filter:contrast(1.2) saturate(1.3)}
+.mesh-bg{background-image:
+  /* Primary tactical grid - military coordinate system (less dense) */
+  repeating-linear-gradient(0deg, rgba(255,211,0,0.3) 0, rgba(255,211,0,0.3) 1px, transparent 1px, transparent 64px),
+  repeating-linear-gradient(90deg, rgba(255,211,0,0.3) 0, rgba(255,211,0,0.3) 1px, transparent 1px, transparent 64px),
+  /* Secondary diagonal grid - radar sweep lines (less dense) */
+  repeating-linear-gradient(45deg, rgba(255,211,0,0.15) 0, rgba(255,211,0,0.15) 1px, transparent 1px, transparent 96px),
+  repeating-linear-gradient(-45deg, rgba(255,211,0,0.15) 0, rgba(255,211,0,0.15) 1px, transparent 1px, transparent 96px),
+  /* Tertiary grid - geographical positioning (less dense) */
+  repeating-linear-gradient(30deg, rgba(255,211,0,0.1) 0, rgba(255,211,0,0.1) 1px, transparent 1px, transparent 128px),
+  repeating-linear-gradient(-30deg, rgba(255,211,0,0.1) 0, rgba(255,211,0,0.1) 1px, transparent 1px, transparent 128px),
+  /* Radar pulse rings */
+  radial-gradient(circle at 20% 30%, rgba(255,211,0,0.08) 0%, transparent 8%),
+  radial-gradient(circle at 80% 70%, rgba(255,211,0,0.06) 0%, transparent 12%),
+  radial-gradient(circle at 50% 50%, rgba(255,211,0,0.04) 0%, transparent 15%);
+  background-blend-mode: screen, screen, screen, screen, screen, screen, screen, screen, screen;
+  opacity:.7;
+  box-shadow: 0 0 40px rgba(255,211,0,0.1);
+  transition: all 0.3s ease;
+}
+
+.content-section {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 120px 2rem;
+    position: relative;
+    box-sizing: border-box;
+}
+
+.panel{width:min(1220px,92vw);height:auto;background:linear-gradient(180deg, rgba(255,215,0,0.02), transparent);border-radius:var(--radius);padding:28px;display:grid;grid-template-columns:1fr 420px;gap:28px;align-items:center;box-shadow:var(--glow);border:1px solid rgba(255,215,0,0.04);position:relative;z-index:8}
+.panel.full{grid-template-columns:1fr}
+
+/* header & logo */
+.header{
+    position:sticky;
+    top: 0;
+    left: 20px;
+    padding: 10px 20px;
+    z-index:22;
+    background: rgba(3, 3, 3, 0.8);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 215, 0, 0.06);
+}
+.header-content {
+    display:flex;
+    align-items:center;
+    gap:12px;
+    width: 100%;
+    max-width: 1300px;
+    margin: 0 auto;
+}
+.logo-holder{width:220px;height:auto;display:flex;align-items:center;gap:10px;}
+.logo-holder img{height:44px;object-fit:contain}
+.brand{color:var(--accent);font-weight:700;letter-spacing:1px;font-family:"Share Tech Mono", monospace}
+
+/* terminal/waitlist */
+.terminal{width:860px;max-width:92vw;min-width:320px;background:rgba(8,8,8,0.6);border-radius:12px;padding:26px;border:1px solid rgba(255,215,0,0.04);box-shadow:0 18px 48px rgba(0,0,0,0.6);display:flex;flex-direction:row;gap:24px;align-items:center;justify-content:center;position:relative}
+.terminal .left{flex:1;min-width:260px}
+.terminal .right{width:420px;max-width:48%; display:flex;flex-direction:column; gap:10px; align-items:stretch; justify-content:flex-start}
+
+/* form & fields */
+.muted{color:var(--muted);font-size:13px}
+.h1{font-family:"Share Tech Mono", monospace;font-size:28px;color:var(--accent);margin:6px 0}
+.lead{font-size:16px;color:#e9e9e9;line-height:1.36}
+.wait-form{display:flex;flex-direction:column;gap:12px;width:100%}
+.wait-form label{font-size:13px;color:var(--muted);font-weight:700}
+.wait-form input, .wait-form textarea, .wait-form select{
+  padding:12px 14px;border-radius:10px;border:1px solid rgba(255,215,0,0.04);background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));color:#efefef;font-size:16px;outline:none;transition:box-shadow .12s, border-color .12s;min-height:44px;
+}
+/* improve visibility of inputs and dropdowns on dark background */
+.wait-form input, .wait-form textarea{background-color:rgba(18,18,18,0.92);border-color:rgba(255,215,0,0.18);color:#f2f2f2}
+.wait-form select{background-color:rgba(18,18,18,0.96);border-color:rgba(255,215,0,0.18);color:#f2f2f2}
+.wait-form input:hover, .wait-form textarea:hover, .wait-form select:hover{border-color:rgba(255,215,0,0.26)}
+.wait-form input::placeholder, .wait-form textarea::placeholder{color:#bdbdbd;opacity:1}
+
+/* first-half alignments only (preserve original taller input sizing) */
+#waitlistForm label{display:block;margin:0 0 6px 0}
+/* increase vertical spacing between field groups */
+#waitlistForm label:not(:first-of-type){margin-top:14px !important}
+/* add space above the State/UT + Age row (inside #topFields) */
+#topFields > div.state-age-row{margin-top:18px}
+/* add extra space above Gender label */
+#topFields label[for="gender"]{margin-top:18px !important}
+/* top part layout & alignment (reverted to simple flow) */
+/* collapse/expand behavior for top section */
+.top-fields{transition:max-height .45s ease, opacity .35s ease; max-height:1200px}
+.top-fields.compact{max-height:0; opacity:0; margin:0; padding:0; overflow:hidden}
+/* actions row: Continue full-width, Clear compact on right */
+.top-actions{display:flex;gap:12px;align-items:center;margin-top:12px}
+.top-actions .continue-btn{flex:1}
+.btn-clear{padding:12px 16px;border-radius:10px;border:1px solid rgba(255,215,0,0.06);background:transparent;color:var(--muted);min-width:84px}
+
+/* dropdown styling (accent) */
+.wait-form select{
+  appearance:none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--accent) 50%),
+    linear-gradient(135deg, var(--accent) 50%, transparent 50%),
+    linear-gradient(to right, rgba(255,255,255,0.02), rgba(255,255,255,0.02));
+  background-position: calc(100% - 18px) calc(1em + 2px), calc(100% - 13px) calc(1em + 2px), 100% 0;
+  background-size: 8px 8px, 8px 8px, 2.5em;
+  background-repeat: no-repeat;
+  padding-right:42px;
+}
+/* focus styles restored */
+.wait-form input:focus, .wait-form textarea:focus, .wait-form select:focus{box-shadow:0 0 0 2px rgba(255,211,0,0.18), 0 0 28px rgba(255,163,0,0.12);border-color:var(--accent)}
+/* textarea sizing restored */
+.wait-form textarea{min-height:88px;resize:vertical}
+.wait-form option{background:#0f0f0f;color:#f2f2f2}
+/* keep number inputs inside and remove default spinner margins */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
+input[type="number"]{ -moz-appearance:textfield }
+/* ensure transmission (contact) fields match dark styling */
+.contact-form input, .contact-form textarea, .contact-form select{
+  background-color:rgba(18,18,18,0.92);
+  border:1px solid rgba(255,215,0,0.18);
+  color:#f2f2f2;
+}
+.contact-form input::placeholder, .contact-form textarea::placeholder{color:#bdbdbd;opacity:1}
+.contact-form input:focus, .contact-form textarea:focus, .contact-form select:focus{
+  box-shadow:0 0 0 2px rgba(255,211,0,0.18), 0 0 28px rgba(255,163,0,0.12);
+  border-color:var(--accent);
+}
+.contact-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 6px;
+    align-items: center;
+}
+.email-fallback {
+    color: var(--muted);
+    font-size: 13px;
+}
+/* post-submit acknowledgement card */
+.ack-card{position:relative;background:linear-gradient(180deg, rgba(20,20,20,0.95), rgba(8,8,8,0.95));border:1px solid rgba(255,215,0,0.12);border-radius:12px;padding:16px 18px;color:#eaeaea;box-shadow:0 16px 40px rgba(255,211,0,0.08), inset 0 0 0 1px rgba(255,215,0,0.06);overflow:hidden}
+.ack-card::before{content:"";position:absolute;inset:-1px;border-radius:12px;background:linear-gradient(90deg, rgba(255,211,0,0.35), rgba(255,122,0,0.18), rgba(255,211,0,0.35));filter:blur(14px);opacity:0.18;z-index:0}
+.ack-card::after{content:"";position:absolute;inset:0;border-radius:12px;background:repeating-linear-gradient(to bottom, rgba(255,255,255,0.02), rgba(255,255,255,0.02) 1px, transparent 3px, transparent 6px);opacity:0.06;pointer-events:none}
+.ack-row{display:flex;align-items:center;gap:10px;position:relative;z-index:1}
+.ack-icon{width:22px;height:22px;color:var(--accent);opacity:0.95}
+.ack-title{margin:0;color:var(--accent);font-family:"Share Tech Mono", monospace;font-size:18px;letter-spacing:.4px}
+.ack-body{margin:8px 0 10px 0;color:#eaeaea;line-height:1.5;position:relative;z-index:1}
+.ack-status{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;position:relative;z-index:1}
+.ack-pip{width:8px;height:8px;border-radius:50%;background:#16ff72;box-shadow:0 0 10px rgba(22,255,114,0.7)}
+@keyframes pulse{0%{transform:scale(.9);opacity:.9}70%{transform:scale(1.25);opacity:.6}100%{transform:scale(.9);opacity:.9}}
+.ack-pip{animation:pulse 1.6s ease-in-out infinite}
+
+/* expansion / holo */
+.holo{max-height:0;opacity:0;overflow:hidden;transform-origin:top;transition:all .7s cubic-bezier(.2,.9,.2,1)}
+.holo.open{max-height:none;opacity:1;padding-top:14px;padding-bottom:16px;overflow:visible}
+.holo .armory{display:flex;gap:12px;margin-top:10px;flex-wrap:wrap}
+
+/* weapon-holo (detailed) */
+.weapon-holo{
+  width:160px;height:110px;border-radius:10px;position:relative;display:flex;align-items:center;justify-content:center;
+  perspective:1100px;
+  transform-style:preserve-3d;
+  will-change:transform, opacity;
+}
+.weapon-holo .holo-body{
+  width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+  backface-visibility:hidden; transform-style:preserve-3d;
+  filter: drop-shadow(0 0 6px rgba(0,245,255,0.06)) drop-shadow(0 0 12px rgba(0,245,255,0.04));
+  transition:transform .18s ease, filter .18s ease;
+  animation: holoPulse 2.6s ease-in-out infinite;
+  border-radius:8px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.005), rgba(0,0,0,0.08));
+  border:1px solid rgba(0,245,255,0.04);
+}
+.weapon-holo .spin{display:block;width:94%;height:94%;transform-style:preserve-3d;animation:rotate3D 9s linear infinite}
+.weapon-holo::after{
+  content:'';position:absolute;left:0;top:-60%;width:100%;height:60%;background:
+    linear-gradient(to bottom, rgba(0,245,255,0.12), rgba(0,245,255,0.06) 30%, rgba(0,245,255,0.02) 55%, transparent 70%);
+  mix-blend-mode:screen;pointer-events:none;animation:scanDown 2.8s linear infinite;border-radius:10px;opacity:0.9;
+}
+
+@keyframes scanDown { 0%{ top:-60%; opacity:0 } 10%{ opacity:0.9 } 100%{ top:120%; opacity:0 } }
+@keyframes holoPulse {
+  0%{ filter: drop-shadow(0 0 4px rgba(0,245,255,0.06)) drop-shadow(0 0 8px rgba(0,245,255,0.04)); }
+  50%{ filter: drop-shadow(0 0 14px rgba(0,245,255,0.12)) drop-shadow(0 0 26px rgba(0,245,255,0.09)); transform:translateZ(2px); }
+  100%{ filter: drop-shadow(0 0 4px rgba(0,245,255,0.06)) drop-shadow(0 0 8px rgba(0,245,255,0.04)); }
+}
+@keyframes rotate3D { 0%{ transform: rotateY(0deg) rotateX(0deg) } 50%{ transform: rotateY(180deg) rotateX(6deg) } 100%{ transform: rotateY(360deg) rotateX(0deg) } }
+
+/* Deploy button */
+.deploy {
+  margin-top:10px;padding:12px 14px;border-radius:12px;border:none;font-weight:900;font-size:16px;
+  color:#080808;cursor:pointer;background:linear-gradient(90deg,var(--deploy-start),var(--deploy-end));
+  box-shadow:0 18px 48px rgba(255,80,20,0.12), inset 0 -4px 12px rgba(0,0,0,0.18);
+  transition:transform .12s, box-shadow .12s;
+}
+.deploy:hover{transform:translateY(-4px);box-shadow:0 28px 68px rgba(255,80,20,0.18), inset 0 -6px 14px rgba(0,0,0,0.22)}
+
+/* Armory slide improvements */
+.armory-grid{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;justify-content:center;padding:20px 0}
+.armory-card{width:280px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(0,0,0,0.12));border-radius:10px;padding:16px;border:1px solid rgba(255,215,0,0.03);transition:all 0.3s ease;margin-bottom:10px}
+.armory-card:hover{transform:translateY(-4px);box-shadow:0 12px 32px rgba(255,215,0,0.1);border-color:rgba(255,215,0,0.15)}
+.armory-card h4{margin:8px 0 6px 0;color:var(--accent);font-size:16px}
+.armory-card p{color:var(--muted);margin:0;font-size:13px}
+
+/* Operational visuals grid */
+.gallery-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:14px}
+.gallery-grid img{width:100%;height:220px;object-fit:cover;border-radius:10px;border:1px solid rgba(255,215,0,0.04)}
+
+/* Contact + poster layout (last slide) */
+.contact-wrap{display:flex;gap:20px;align-items:stretch;height:100%}
+.contact-form{flex:1;background:rgba(8,8,8,0.5);padding:18px;border-radius:10px;border:1px solid rgba(255,215,0,0.04);display:flex;flex-direction:column;gap:10px;max-height:100%}
+.poster-wrap{width:420px;flex-shrink:0;border-radius:10px;overflow:hidden;border:1px solid rgba(255,215,0,0.04);background:#080808;display:flex;align-items:center;justify-content:center}
+.poster-wrap img{width:100%;height:100%;object-fit:cover;display:block}
+
+/* Modal styles */
+.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:1000;opacity:0;visibility:hidden;transition:all 0.3s ease}
+.modal-overlay.active{opacity:1;visibility:visible}
+.modal-content{background:linear-gradient(180deg, rgba(13,13,13,0.95), rgba(8,8,8,0.98));border:1px solid rgba(255,215,0,0.1);border-radius:16px;padding:32px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto;transform:scale(0.9);transition:all 0.3s ease;box-shadow:0 20px 60px rgba(0,0,0,0.8)}
+.modal-overlay.active .modal-content{transform:scale(1)}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.modal-title{color:var(--accent);font-size:24px;font-weight:700;margin:0}
+.modal-close{background:none;border:none;color:var(--muted);font-size:24px;cursor:pointer;padding:4px;border-radius:4px;transition:all 0.2s ease}
+.modal-close:hover{color:var(--accent);background:rgba(255,215,0,0.1)}
+.modal-image{width:100%;height:200px;background:rgba(255,215,0,0.05);border:2px solid rgba(255,215,0,0.15);border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:20px}
+.modal-description{color:#e9e9e9;line-height:1.6;margin-bottom:20px}
+.modal-specs{background:rgba(255,215,0,0.05);border:1px solid rgba(255,215,0,0.1);border-radius:8px;padding:16px}
+.modal-specs h4{color:var(--accent);margin:0 0 12px 0;font-size:16px}
+.modal-specs ul{color:var(--muted);margin:0;padding-left:20px;line-height:1.5}
+
+
+/* ------------------------------------------ */
+/* --- MOBILE RESPONSIVE IMPROVEMENTS --- */
+/* ------------------------------------------ */
+
+/* Tablet and smaller desktops */
+@media (max-width: 980px){
+  .content-section {
+      padding: 80px 1.5rem;
+  }
+  .panel{
+    grid-template-columns:1fr;
+    height:auto;
+    padding: 24px;
+  }
+  .terminal{
+    flex-direction:column;
+    gap: 24px;
+    height: auto;
+    width: 100%;
+  }
+  .terminal .right{
+    width:100%;
+    max-width: 100%;
+  }
+  .header{
+      padding: 8px 16px;
+  }
+  .header-content {
+      gap: 10px;
+  }
+  .logo-holder{width:auto; height: 56px;}
+  .brand { font-size: 14px; }
+  
+  .gallery-grid img{height:180px}
+  
+  .contact-wrap{
+    flex-direction:column;
+    height: auto;
+    gap: 24px;
+  }
+  .poster-wrap{
+    width:100%;
+    height: 450px; /* Taller height for vertical poster */
+    order:2; /* Show poster BELOW form */
+  }
+  .contact-form {
+    order: 1; /* Show form ABOVE poster */
+  }
+  .holo.open{max-height:none}
+
+  /* improve modal on mobile */
+  .modal-content{padding:24px;max-width:95%;width:95%}
+  .modal-title{font-size:22px}
+  
+  /* improve armory grid on mobile */
+  .armory-grid{gap:20px}
+  .armory-card{width:100%;max-width:320px}
+}
+
+/* --- TRUE MOBILE STYLES (Phones) --- */
+@media (max-width: 560px){
+  .content-section {
+    padding: 80px 1rem; /* Adjust padding for smallest screens */
+  }
+  .panel {
+    padding: 16px;
+  }
+
+  .h1{font-size:24px; line-height: 1.2;}
+  .lead{font-size:15px; line-height: 1.4;}
+  
+  .deploy{
+    font-size:16px;
+    padding: 14px; /* Better tap size */
+    min-height:48px;
+  }
+  
+  .gallery-grid{grid-template-columns:1fr; gap: 16px;}
+  .gallery-grid img { height: 200px; }
+  
+  .poster-wrap{width:100%; height: 350px;} /* Adjusted height for smaller phones */
+
+  /* Form specific improvements */
+  .terminal {
+    padding: 20px;
+  }
+  #waitlistForm {
+    gap: 16px; /* Increase gap between form elements */
+  }
+  #waitlistForm label:not(:first-of-type) {
+    margin-top: 0 !important; /* Remove fixed margin */
+  }
+  /* stack State/UT and Age vertically on small screens */
+  #topFields > div.state-age-row {
+    flex-direction:column !important;
+    gap:16px !important;
+    margin-top: 0;
+  }
+  #topFields > div.state-age-row > div{width:100%}
+  /* remove extra space above Gender label */
+  #topFields label[for="gender"]{margin-top:0 !important}
+
+  /* improve readability of labels/fields */
+  .wait-form label{font-size:14px}
+  .wait-form input, .wait-form select, .wait-form textarea{
+    padding:16px;
+    font-size:16px;
+    min-height:50px; /* Better tap height */
+  }
+  
+  .top-actions{gap:12px; flex-wrap: wrap;}
+  .top-actions .continue-btn { flex-grow: 1; }
+  .top-actions .btn-clear { flex-grow: 1; }
+  
+  .contact-actions {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .contact-actions .deploy {
+    width: 100%;
+    margin-bottom: 8px; /* Add some space below the button when wrapped */
+  }
+  .email-fallback {
+    text-align: center;
+    width: 100%;
+  }
+
+  /* improve header on very small screens */
+  .header{
+      padding: 6px 12px;
+  }
+  .logo-holder img { height: 36px; }
+
+  /* improve modal on very small screens */
+  .modal-content{padding:20px;max-width:95%;width:95%}
+  .modal-title{font-size:20px}
+  .modal-image{height:160px}
+  
+  /* improve armory on very small screens */
+  .armory-card{width:100%;max-width:none}
+  .armory-card > div > div:first-child{width:180px;height:130px}
+  
+  /* Holo armory on mobile */
+  .holo .armory {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* 2-column grid for weapons */
+    gap: 16px;
+  }
+  .weapon-holo {
+    width: 100%;
+    height: 90px; /* Adjust height */
+  }
+}
+
+</style>
+</head>
+<body>
+
+<div class="mesh-bg" id="meshBg"></div>
+
+<!-- header with logo placeholder -->
+<header class="header">
+    <div class="header-content">
+        <div class="logo-holder">
+            <img src="assets/images/logo.jpg" alt="MARZOC Logo" id="topLogo" onerror="this.style.opacity=0.15">
+            <div style="display:flex;flex-direction:column">
+                <div class="brand">MARZOC Airsoft</div>
+                <div style="font-size:11px;color:var(--muted)">Honour the Past, Dominate the Field.</div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main>
+    <!-- Section 0: Waitlist (terminal) -->
+    <section id="waitlist" class="content-section">
+      <div class="terminal" role="region" aria-label="Waitlist terminal">
+          <div class="left">
+            <div class="muted">Mission Briefing</div>
+            <h1 class="h1">Be the first boots on the ground — MARZOC is deploying.</h1>
+          <p class="lead">Gear up, Operator. Lock and load for intense scenarios inspired by COD, Black Ops, CSGO and Battlefield. Join the first wave for priority invites and exclusive loadouts.</p>
+            <div class="perks" style="margin-top:12px">
+            <h4 style="margin:0 0 6px 0;color:#eaeaea;font-weight:800">Early-access perks</h4>
+            <p style="margin:0;color:#eaeaea">Priority invites • AO sneak peeks • First-wave rental loadouts • Launch discounts</p>
+          </div>
+          </div>
+
+          <div class="right">
+            <form id="waitlistForm" class="wait-form" autocomplete="on" novalidate>
+            <div id="topFields" class="top-fields">
+            <label for="callsign">Call Sign</label>
+            <input id="callsign" name="callsign" placeholder="Your handle" maxlength="15" pattern=".{1,15}" required>
+
+            <label for="phone">Phone Number</label>
+            <input id="phone" name="phone" type="tel" inputmode="numeric" placeholder="+91 98xxxxxxx" pattern="\\d{10}" maxlength="10" required>
+
+              <label for="email">Email</label>
+              <input id="email" name="email" type="email" placeholder="you@domain.com" required>
+
+              <div class="state-age-row" style="display:flex;gap:10px">
+                <div style="flex:1">
+                  <label for="state">State / UT</label>
+                  <select id="state" name="state" required>
+                    <option value="">Select state / UT</option>
+                    <option>Maharashtra</option><option>Karnataka</option><option>Delhi</option><option>Tamil Nadu</option><option>Uttar Pradesh</option>
+                    <option>West Bengal</option><option>Gujarat</option><option>Rajasthan</option><option>Madhya Pradesh</option><option>Kerala</option>
+                    <option>Punjab</option><option>Haryana</option><option>Telangana</option><option>Assam</option><option>Odisha</option>
+                    <option>Andhra Pradesh</option><option>Chhattisgarh</option><option>Jharkhand</option><option>Uttarakhand</option><option>Himachal Pradesh</option>
+                  </select>
+                </div>
+              <div style="flex:0 0 120px">
+                <label for="age">Age</label>
+                <input id="age" name="age" type="text" inputmode="numeric" pattern="\\d{2,3}" maxlength="3" placeholder="Age" required>
+              </div>
+              </div>
+
+              <label for="gender" style="margin-top:8px">Gender</label>
+            <select id="gender" name="gender" required><option value="">Select</option><option>Male</option><option>Female</option></select>
+
+            <div class="top-actions">
+                <button type="button" id="continueBtn" class="deploy continue-btn">Continue</button>
+              <button id="clearTop" type="button" class="btn-clear">Clear</button>
+            </div>
+              </div>
+
+            <!-- HOLOGRAPHIC EXPANSION -->
+              <div id="holo" class="holo" aria-hidden="true">
+              <div class="armory">
+                <!-- Weapon placeholders -->
+                <div class="weapon-holo" data-name="M4">
+                  <div class="holo-body">
+                    <div class="spin" aria-hidden="true">
+                      <!-- Outline M4-style carbine -->
+                      <svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--holo)">
+                          <path d="M20 60 h65 l8 -6 h18 l4 6 h30 l10 4 v8 l-10 4 h-30 l-4 6 h-18 l-8 -6 h-65 z"/>
+                          <path d="M36 60 v-6 h16 v6"/>
+                          <rect x="22" y="52" width="10" height="16" rx="2"/>
+                          <path d="M54 60 v16"/>
+                        </g>
+                    </svg>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="weapon-holo" data-name="AK">
+                  <div class="holo-body">
+                    <div class="spin" aria-hidden="true">
+                      <!-- Outline AK-style rifle -->
+                      <svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--holo)">
+                          <path d="M16 66 h70 l40 -10 v10 l-40 10 h-24 l-6 8 h-16 l-6 -8 h-18 z"/>
+                          <path d="M50 66 v14"/>
+                          <path d="M86 66 c8 6 12 14 14 22"/>
+                        </g>
+                    </svg>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="weapon-holo" data-name="SR">
+                  <div class="holo-body">
+                    <div class="spin" aria-hidden="true">
+                      <!-- Outline precision/sniper rifle -->
+                      <svg viewBox="0 0 220 110" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--holo)">
+                          <path d="M18 70 h130 l40 -6 v6 l-40 6 h-90"/>
+                          <rect x="64" y="58" width="28" height="6" rx="2"/>
+                          <path d="M54 70 v12 h-16 v-12"/>
+                        </g>
+                    </svg>
+                    </div>
+                  </div>
+                  </div>
+                </div>
+
+                <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+                  <label for="combat">Combat Style</label>
+                  <select id="combat" name="combat"><option>Stealth</option><option>Run 'n Gun</option><option>Sniper</option><option>Support</option><option>Hybrid</option></select>
+
+                  <label for="loadout">Favourite FPS Loadout</label>
+                  <input id="loadout" name="loadout" placeholder="e.g. M4A1 + MP5 + Frag" />
+
+                <label for="intel">Intel Drop <span class="small-muted" style="color:var(--muted);font-size:12px">(optional)</span></label>
+                  <textarea id="intel" name="intel" placeholder="Arena style ideas, gear requests, feedback..."></textarea>
+
+                  <div style="display:flex;gap:10px;margin-top:6px">
+                  <button class="deploy" id="deployBtn" type="submit">DEPLOY</button>
+                  <button id="cancelHolo" type="button" style="padding:10px;border-radius:10px;border:1px solid rgba(255,215,0,0.06);background:transparent;color:var(--muted)">Back</button>
+                </div>
+              </div>
+            </div>
+            <!-- end holo -->
+            </form>
+          </div>
+      </div>
+    </section>
+
+    <!-- Section 1: What is an Airsoft Arena? -->
+    <section id="about" class="content-section">
+      <div class="panel full">
+        <div style="padding-right:18px;max-width:980px">
+          <div class="muted">Field Intel</div>
+          <h1 class="h1">What is an Airsoft Arena?</h1>
+          <p class="lead">An airsoft arena is a dedicated venue where participants use realistic, non-lethal replicas (firing safe plastic BBs) to engage in team-based, scenario-driven tactical games. Emphasis on safety, discipline, and immersive mission formats — ideal for casual players and MilSim operators alike.</p>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:center">
+          <div class="video-frame" id="videoFrame" style="width:100%;max-width:520px;height:320px;border-radius:10px;background:#000;border:1px solid rgba(255,215,0,0.03);display:flex;align-items:center;justify-content:center">
+            <video id="introVideo" muted playsinline loop preload="auto" style="width:100%;height:100%;object-fit:cover" poster="">
+              <source src="assets/video/intro.mp4" type="video/mp4">
+              <div style="padding:12px;color:var(--muted)">Video placeholder — upload your intro clip (autoplays muted)</div>
+            </video>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 2: Operational Visuals -->
+    <section id="gallery" class="content-section">
+      <div class="panel full" style="grid-template-columns:1fr;">
+        <div>
+          <div class="muted">Recon Gallery</div>
+          <h1 class="h1">Operational Visuals</h1>
+          <p class="lead">A rotating set of mission visuals — night vision, insertion, drone POV, CQB — curated to set the tone.</p>
+
+          <div class="gallery-grid">
+            <img src="assets/images/gallery/gallery-1.jpg" alt="Operational Visual 1">
+            <img src="assets/images/gallery/gallery-2.jpg" alt="Operational Visual 2">
+            <img src="assets/images/gallery/gallery-3.jpg" alt="Operational Visual 3">
+            <img src="assets/images/gallery/gallery-4.jpg" alt="Operational Visual 4">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 3: Story & Mission -->
+    <section id="story" class="content-section">
+      <div class="panel">
+        <div style="max-width:860px">
+          <div class="muted">Origin Story</div>
+          <h1 class="h1">Our Story & Vision</h1>
+          <p id="storyText" class="lead" style="margin-top:8px"></p>
+
+          <div class="mission-box" style="margin-top:12px">
+            <h3 style="color:var(--accent);margin:0;font-size:15px">Mission</h3>
+            <p style="margin:8px 0 0 0;color:#eaeaea">Make tactical team-play accessible. Train responsibly. Build a community of players who play with honour.</p>
+          </div>
+
+          <p class="small-muted" style="margin-top:10px">Expect scenario nights, competitive ladders, community ops, and trained marshals enforcing strict Rules of Engagement.</p>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:center">
+          <div style="width:100%;max-width:420px;background:#070707;border-radius:10px;padding:16px;border:1px solid rgba(255,215,0,0.04);position:relative;overflow:hidden">
+            <div style="position:absolute;inset:0;background:linear-gradient(90deg, rgba(255,215,0,0.08) 0%, transparent 15%, transparent 85%, rgba(255,215,0,0.08) 100%);pointer-events:none;z-index:1;border-radius:8px"></div>
+            <img src="assets/images/story.jpg" alt="MARZOC Story & Vision" style="width:100%;height:auto;max-height:400px;object-fit:contain;border-radius:8px;display:block;position:relative;z-index:2;box-shadow:0 0 20px rgba(255,215,0,0.1), 0 0 40px rgba(255,215,0,0.05)" onerror="this.style.opacity=.15;this.style.display='flex';this.style.alignItems='center';this.style.justifyContent='center';this.style.color='var(--muted)';this.style.height='300px';this.innerHTML='STORY IMAGE (placeholder)'">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 4: Armory -->
+    <section id="armory" class="content-section">
+      <div class="panel full" style="overflow-y:auto">
+        <div style="display:flex;flex-direction:column;align-items:center;width:100%;padding:20px 0">
+          <div class="muted">Armory</div>
+          <h1 class="h1">Guns & Gear — Inspect Loadouts</h1>
+          <p class="lead">Browse our selection of high-quality airsoft equipment and tactical gear. (Replicas coming soon...)</p>
+
+          <div class="armory-grid" style="margin-top:32px;justify-content:center;max-width:1200px;gap:32px;padding:0">
+            <!-- Gun 1 -->
+            <div class="armory-card" onclick="openItemModal('Assault Rifle', 'High-performance airsoft rifle for tactical gameplay. Perfect for medium to long-range engagements with adjustable hop-up and precision barrel.', 'C:\\Users\\squwa\\Downloads\\b9d5a8e8-a7a5-46d2-bf76-48aeead60058.jpg')">
+              <div style="display:flex;flex-direction:column;gap:16px;align-items:center;text-align:center;cursor:pointer">
+                <div style="width:200px;height:140px;background:rgba(255,215,0,0.05);border:2px solid rgba(255,215,0,0.15);border-radius:12px;display:flex;align-items:center;justify-content:center;transition:all 0.3s ease; overflow: hidden;">
+                   <img src="assets/images/guns/gun-1.jpg" alt="Assault Rifle" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.display='none'; this.parentElement.innerHTML = '<div style=\'color:var(--muted);font-size:16px;font-weight:600\'>GUN 1</div>'">
+                </div>
+                <div>
+                  <h4>Assault Rifle</h4>
+                  <p>High-performance airsoft rifle for tactical gameplay.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Gun 2 -->
+            <div class="armory-card" onclick="openItemModal('SMG', 'Compact submachine gun designed for close-quarters combat. High rate of fire with excellent maneuverability in tight spaces.', 'gun2.jpg')">
+              <div style="display:flex;flex-direction:column;gap:16px;align-items:center;text-align:center;cursor:pointer">
+                   <div style="width:200px;height:140px;background:rgba(255,215,0,0.05);border:2px solid rgba(255,215,0,0.15);border-radius:12px;display:flex;align-items:center;justify-content:center;transition:all 0.3s ease; overflow: hidden;">
+                     <img src="assets/images/guns/gun-2.jpg" alt="SMG" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.display='none'; this.parentElement.innerHTML = '<div style=\'color:var(--muted);font-size:16px;font-weight:600\'>GUN 2</div>'">
+                </div>
+                <div>
+                  <h4>SMG</h4>
+                  <p>Compact submachine gun for close-quarters combat.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Gun 3 -->
+            <div class="armory-card" onclick="openItemModal('Sniper Rifle', 'Precision long-range airsoft sniper rifle with adjustable scope and high-accuracy barrel. Perfect for reconnaissance and long-distance engagements.', 'gun3.jpg')">
+              <div style="display:flex;flex-direction:column;gap:16px;align-items:center;text-align:center;cursor:pointer">
+                   <div style="width:200px;height:140px;background:rgba(255,215,0,0.05);border:2px solid rgba(255,215,0,0.15);border-radius:12px;display:flex;align-items:center;justify-content:center;transition:all 0.3s ease; overflow: hidden;">
+                     <img src="assets/images/guns/gun-3.jpg" alt="Sniper Rifle" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.display='none'; this.parentElement.innerHTML = '<div style=\'color:var(--muted);font-size:16px;font-weight:600\'>GUN 3</div>'">
+                </div>
+                <div>
+                  <h4>Sniper Rifle</h4>
+                  <p>Precision long-range airsoft sniper rifle.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Gear 1 -->
+            <div class="armory-card" onclick="openItemModal('Tactical Vest', 'Professional tactical vest with multiple pouches and MOLLE compatibility. Adjustable fit with reinforced stitching for durability.', 'gear1.jpg')">
+              <div style="display:flex;flex-direction:column;gap:16px;align-items:center;text-align:center;cursor:pointer">
+                   <div style="width:200px;height:140px;background:rgba(255,215,0,0.05);border:2px solid rgba(255,215,0,0.15);border-radius:12px;display:flex;align-items:center;justify-content:center;transition:all 0.3s ease; overflow: hidden;">
+                     <img src="assets/images/guns/tactical-vest.jpg" alt="Tactical Vest" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.display='none'; this.parentElement.innerHTML = '<div style=\'color:var(--muted);font-size:16px;font-weight:600\'>GEAR 1</div>'">
+                </div>
+                <div>
+                  <h4>Tactical Vest</h4>
+                  <p>Professional tactical vest with multiple pouches.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Gear 2 -->
+            <div class="armory-card" onclick="openItemModal('Helmet & Goggles', 'Complete head protection system with impact-resistant helmet and anti-fog goggles. ANSI-rated safety equipment for maximum protection.', 'gear2.jpg')">
+              <div style="display:flex;flex-direction:column;gap:16px;align-items:center;text-align:center;cursor:pointer">
+                   <div style="width:200px;height:140px;background:rgba(255,215,0,0.05);border:2px solid rgba(255,215,0,0.15);border-radius:12px;display:flex;align-items:center;justify-content:center;transition:all 0.3s ease; overflow: hidden;">
+                     <img src="assets/images/guns/helmet-goggles.jpg" alt="Helmet & Goggles" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.display='none'; this.parentElement.innerHTML = '<div style=\'color:var(--muted);font-size:16px;font-weight:600\'>GEAR 2</div>'">
+                </div>
+                <div>
+                  <h4>Helmet & Goggles</h4>
+                  <p>Safety equipment for head and eye protection.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Gear 3 - Face Protection Mask -->
+            <div class="armory-card" onclick="openItemModal('Face Protection Mask', 'Full-face protection mask with integrated mesh and padding. Provides complete facial protection while maintaining visibility and breathability.', 'gear3.jpg')">
+              <div style="display:flex;flex-direction:column;gap:16px;align-items:center;text-align:center;cursor:pointer">
+                   <div style="width:200px;height:140px;background:rgba(255,215,0,0.05);border:2px solid rgba(255,215,0,0.15);border-radius:12px;display:flex;align-items:center;justify-content:center;transition:all 0.3s ease; overflow: hidden;">
+                     <img src="assets/images/guns/face-mask.jpg" alt="Face Protection Mask" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.display='none'; this.parentElement.innerHTML = '<div style=\'color:var(--muted);font-size:16px;font-weight:600\'>GEAR 3</div>'">
+                </div>
+                <div>
+                  <h4>Face Protection Mask</h4>
+                  <p>Complete facial protection with mesh and padding.</p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 5: Contact -->
+    <section id="contact" class="content-section">
+      <div class="panel" style="grid-template-columns:1fr;">
+        <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">
+          <div class="contact-wrap" style="width:100%;max-width:1120px">
+            <div class="contact-form">
+          <div class="muted">Need Backup?</div>
+          <h1 class="h1">Send a Transmission</h1>
+          <p class="lead">Sign up seargant! (if you haven't yet), show investors there’s a real community ready for safe, top-quality airsoft experiences. Your support helps us secure funding and bring this vision to life!</p>
+
+              <label for="username">Your Username</label>
+              <input id="username" name="username" placeholder="Your handle or real name" required>
+
+              <label for="cemail">Email</label>
+              <input id="cemail" name="cemail" type="email" placeholder="you@domain.com" required>
+
+              <label for="cmessage">Message</label>
+              <textarea id="cmessage" name="cmessage" rows="5" placeholder="What do you want to know or request?"></textarea>
+
+              <div class="contact-actions">
+                <button class="deploy" id="contactSend" type="button">SEND TRANSMISSION</button>
+                <div class="email-fallback">Or email: <strong style="color:var(--accent)">marzocairsoftpvtltd@gmail.com</strong></div>
+              </div>
+
+              <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+                <a href="https://www.instagram.com/marzocairsoft/" title="Instagram" style="color:var(--accent)" target="_blank" rel="noopener noreferrer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="4" stroke="#ffd300" stroke-width="1.2"/></svg></a>
+                <a href="https://x.com/MARZOCAirsoft" title="X" style="color:var(--accent)" target="_blank" rel="noopener noreferrer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 4l16 16m0-16L4 20" stroke="#ffd300" stroke-width="1.6"/></svg></a>
+              </div>
+
+            </div>
+
+            <div class="poster-wrap" role="img" aria-label="MARZOC Poster">
+              <img src="assets/images/poster.jpg" alt="MARZOC Poster" onerror="this.style.opacity=.15">
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+</main>
+
+<!-- Modal for Guns & Gear -->
+<div class="modal-overlay" id="itemModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modalTitle">Item Details</h2>
+      <button class="modal-close" onclick="closeItemModal()" aria-label="Close modal">&times;</button>
+    </div>
+    <div class="modal-image" id="modalImage">
+      <div style="color:var(--muted);font-size:18px;font-weight:600">IMAGE PLACEHOLDER</div>
+    </div>
+    <div class="modal-description" id="modalDescription">
+      Detailed description of the selected item.
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+  /* --- audio context & slide chime --- */
+  let audioCtx=null;
+  function initAudio() {
+      if(!audioCtx) {
+          try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ audioCtx=null; }
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume();
+      }
+  }
+  document.body.addEventListener('click', initAudio, { once: true });
+  document.body.addEventListener('keydown', initAudio, { once: true });
+
+  /* --- Holographic expansion logic (waitlist) --- */
+  const continueBtn = document.getElementById('continueBtn');
+  const holo = document.getElementById('holo');
+  const cancelHolo = document.getElementById('cancelHolo');
+  const clearTop = document.getElementById('clearTop');
+
+  function topFieldsValid(){
+    const callsign = document.getElementById('callsign').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const state = document.getElementById('state').value;
+    const age = document.getElementById('age').value;
+    const gender = document.getElementById('gender').value;
+    const phoneOk = /^\d{10}$/.test(phone);
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    const callsignOk = /^.{1,15}$/.test(callsign);
+    return callsignOk && phoneOk && emailOk && state && age && gender;
+  }
+  function playHoloChime(){
+    if(!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type='sine';
+    o.frequency.setValueAtTime(640, now);
+    o.frequency.linearRampToValueAtTime(980, now+0.08);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(0.14, now+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, now+0.45);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(now); o.stop(now+0.5);
+  }
+  function openHolo(){
+    if (!topFieldsValid()) { 
+        alert('Please fill all required fields correctly.'); 
+        return; 
+    }
+    holo.classList.add('open'); holo.setAttribute('aria-hidden','false');
+    playHoloChime();
+    document.querySelectorAll('.weapon-holo').forEach((w,i)=> { w.style.opacity = 0; setTimeout(()=> { w.style.transition='opacity .36s ease'; w.style.opacity=1 }, i*90); });
+    const topFields = document.getElementById('topFields');
+    if(topFields) topFields.classList.add('compact');
+    setTimeout(()=> { holo.scrollIntoView({behavior:'smooth', block:'nearest'}); }, 160);
+  }
+  continueBtn.addEventListener('click', openHolo);
+  cancelHolo.addEventListener('click', ()=> { holo.classList.remove('open'); holo.setAttribute('aria-hidden','true'); const tf=document.getElementById('topFields'); if(tf) tf.classList.remove('compact'); });
+  clearTop.addEventListener('click', ()=> { document.querySelectorAll('#callsign,#phone,#email,#state,#age,#gender').forEach(i=> i.value=''); holo.classList.remove('open'); });
+
+  /* waitlist submit */
+  document.getElementById('waitlistForm').addEventListener('submit', e=>{
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target).entries());
+    if(!/^\d{10}$/.test(data.phone||'')){
+      alert('Enter a 10-digit numeric phone number.');
+      return;
+    }
+    if (holo.classList.contains('open')){
+      data.combat = document.getElementById('combat').value;
+      data.loadout = document.getElementById('loadout').value;
+      data.intel = document.getElementById('intel').value;
+    }
+    console.log('WAITLIST', data);
+    if(audioCtx){ const now=audioCtx.currentTime; const o=audioCtx.createOscillator(); const g=audioCtx.createGain(); o.type='triangle'; o.frequency.setValueAtTime(720,now); o.frequency.exponentialRampToValueAtTime(1020,now+0.06); g.gain.setValueAtTime(0.0001,now); g.gain.linearRampToValueAtTime(0.16,now+0.02); g.gain.exponentialRampToValueAtTime(0.0001,now+0.38); o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now+0.46); }
+    const formWrap = document.getElementById('waitlistForm');
+    formWrap.innerHTML = `
+      <div class="ack-card">
+        <div class="ack-row">
+          <svg class="ack-icon" viewBox="0 0 24 24" fill="none"><path d="M3 12h6l3-6 3 12 3-6h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <div class="ack-title">Transmission Received</div>
+        </div>
+        <p class="ack-body">Copy that, Operator. Your call sign is on the roster. Expect priority pings to your comms. Gear up for deployment — you're in the first wave.</p>
+        <div class="ack-status"><span class="ack-pip"></span> Status: GREEN • ROE acknowledged • Standby for tasking</div>
+      </div>
+    `;
+    holo.classList.remove('open');
+  });
+
+  /* contact form */
+  document.getElementById('contactSend').addEventListener('click', ()=>{
+    const username = document.getElementById('username').value.trim();
+    const email = document.getElementById('cemail').value.trim();
+    const msg = document.getElementById('cmessage').value.trim();
+    if(!username || !email){ alert('Please enter your username and email.'); return; }
+    console.log('CONTACT', {username,email,msg});
+    const cf = document.getElementById('contactSend').closest('.contact-form');
+    cf.innerHTML = `
+      <div class="ack-card">
+        <div class="ack-row">
+          <svg class="ack-icon" viewBox="0 0 24 24" fill="none"><path d="M4 12l4 4 12-12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="ack-title">Signal Locked</div>
+        </div>
+        <p class="ack-body">Your transmission is clean. Command is reading you five by five. Expect a reply to your inbox. Until then — check gear, check mags.</p>
+        <div class="ack-status"><span class="ack-pip"></span> Comms: SECURE • Response window: ASAP</div>
+      </div>
+    `;
+  });
+
+  /* story typewriter */
+  const story = "MARZOC was founded by gamers and military enthusiasts who wanted to bring authentic, safe, and high-quality airsoft combat to India. Our arenas will be designed to prioritise realistic and intense scenarios be it from FPS games like COD, Battlfield, CSGO etc or Military Simulations inspired from the Real World, follow safety protocols, and community events for teams and casual players alike.\n\nWe focus on three pillars: safety, realism, and experience. Expect scenario nights, competitive ladders, and community meetups — all while keeping the experience accessible to beginners.";
+  let si=0, sEl=document.getElementById('storyText');
+  (function typeIt(){ if(si<=story.length && sEl){ sEl.textContent = story.slice(0, si++); setTimeout(typeIt, 14); } })();
+
+  /* weapon-holo tilt for each small holo */
+  document.querySelectorAll('.weapon-holo').forEach(w=>{
+    w.addEventListener('mousemove', e=>{
+      const r = w.getBoundingClientRect();
+      const px = (e.clientX - r.left)/r.width - 0.5;
+      const py = (e.clientY - r.top)/r.height - 0.5;
+      const body = w.querySelector('.holo-body');
+      if(body) body.style.transform = `rotateY(${px*8}deg) rotateX(${ -py*5 }deg) translateZ(4px)`;
+    });
+    w.addEventListener('mouseleave', ()=> { const body = w.querySelector('.holo-body'); if(body) body.style.transform='translateZ(0)'; });
+  });
+
+  /* manage video autoplay on scroll */
+    const video = document.getElementById('introVideo');
+    if (video) {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    video.play().catch(() => {});
+                } else {
+                    video.pause();
+                }
+            });
+        }, { threshold: 0.5 });
+        observer.observe(video);
+    }
+});
+
+/* Modal functions are global */
+function openItemModal(title, description, imageSrc) {
+  const modal = document.getElementById('itemModal');
+  if (!modal) return;
+  const modalTitle = document.getElementById('modalTitle');
+  const modalDescription = document.getElementById('modalDescription');
+  const modalImage = document.getElementById('modalImage');
+  
+  modalTitle.textContent = title;
+  modalDescription.textContent = description;
+  modalImage.innerHTML = `<img src="${imageSrc}" alt="${title}" style="width:100%; height:100%; object-fit:cover; border-radius: 10px;" onerror="this.parentElement.innerHTML = '<div style=\\'color:var(--muted);font-size:18px;font-weight:600\\'>IMAGE NOT FOUND</div>';">`;
+  
+  modal.classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeItemModal() {
+  const modal = document.getElementById('itemModal');
+  if (!modal) return;
+  modal.classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+// Event listeners for modal
+document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.getElementById('itemModal');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeItemModal();
+            }
+        });
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeItemModal();
+        }
+    });
+});
+</script>
+</body>
+</html>
+" and I want you to make the following changes to it.
+i have attached all the images and videos to be integrated in the html.. now i want you to remove the placeholders according to the image being asked.. be aware that i am trying to host it in netlify so make the src paths are corr
